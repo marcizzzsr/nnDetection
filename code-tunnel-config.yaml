@@ -1,0 +1,20 @@
+apptainer:
+  image_path: "/home/agazzi.marcello@ihsr.dom/my_images/sif/nndetection.sif"
+  overlays:
+    code: "/mnt/data/unisr-data/apptainer-image-registry/overlays/vscode.sqsh:ro"
+    writable:
+      enabled: true
+      name: "python_overlay" # path to existing one or where to create
+      auto: true # create automatically if missing
+      sparse: true # use sparse allocation
+      size: 1024 # max size in MB
+      
+binds:
+  - "/mnt/data/unisr-data/datasets/:/opt/data"
+  - "/mnt/scratch/:/opt/data/scratch"
+
+# GPU and tunnel configuration
+gpu:
+  enabled: false
+tunnel:
+  name: "unisr-code-tunnel"
