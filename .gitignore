@@ -115,3 +115,8 @@ ENV/
 *.model
 
 .DS_Store
+
+# SLURM stuff
+code-tunnel-config.yaml
+.overlays/python_overlay
+**/logs
