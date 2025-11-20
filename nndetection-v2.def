@@ -1,0 +1,64 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:24.07-py3
+
+%arguments
+    env_det_num_threads=6
+    env_det_verbose=1
+
+%environment
+    export det_data=/opt/data
+    export det_models=/opt/models
+    export det_num_threads={{ env_det_num_threads }}
+    export det_verbose={{ env_det_verbose }}
+    export OMP_NUM_THREADS=1
+
+%files
+    ./requirements.txt /opt/requirements.txt
+    . /opt/code/nndet
+
+%post
+    # Install some tools
+    apt-get update
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install -y \
+        git \
+        cmake \
+        make \
+        wget \
+        gnupg \
+        build-essential \
+        software-properties-common \
+        gdb \
+        ninja-build
+
+    # Create directories
+    mkdir -p /opt/data
+    mkdir -p /opt/models
+    mkdir -p /opt/code/nndet
+
+    # Install Python packages
+    pip install --upgrade pip
+    pip install --ignore-installed blinker
+    pip install -r /opt/requirements.txt
+    pip install git+https://github.com/mibaumgartner/pytorch_model_summary.git
+
+    # Install nndet
+    cd /opt/code/nndet
+    FORCE_CUDA=1 pip install --no-build-isolation -v -e .
+
+%labels
+    Author Division of Medical Image Computing, German Cancer Research Center (DKFZ), Heidelberg, Germany
+    Version v0.2
+    Description nnDetection - a self-configuring framework for 3D medical object detection
+
+%help
+    This is a Singularity container for nnDetection.
+    
+    Environment variables:
+    - det_data: /opt/data
+    - det_models: /opt/models
+    - det_num_threads: {{ env_det_num_threads }}
+    - det_verbose: {{ env_det_verbose }}
+    
+    Copyright 2020 Division of Medical Image Computing, German Cancer Research Center (DKFZ), Heidelberg, Germany
+    Licensed under the Apache License, Version 2.0

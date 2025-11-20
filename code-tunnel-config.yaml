@@ -3,7 +3,7 @@ apptainer:
   overlays:
     code: "/mnt/data/unisr-data/apptainer-image-registry/overlays/vscode.sqsh:ro"
     writable:
-      enabled: true
+      enabled: false
       name: "python_overlay" # path to existing one or where to create
       auto: true # create automatically if missing
       sparse: true # use sparse allocation
@@ -12,6 +12,7 @@ apptainer:
 binds:
   - "/mnt/data/unisr-data/datasets/:/opt/data"
   - "/mnt/scratch/:/opt/data/scratch"
+  - "/home/agazzi.marcello@ihsr.dom/nnDetection:/opt/code/nndet" # override installed nndet package with custom version
 
 # GPU and tunnel configuration
 gpu:
