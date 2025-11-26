@@ -117,7 +117,7 @@ def prepare_case(
                 instances = {}
                 for label_id in unique_labels:
                     if label_id > 0:  # Skip background
-                        instances[int(label_id)] = 1  # All PI-CAI lesions are csPCa
+                        instances[int(label_id)] = 0  # All PI-CAI lesions are csPCa
 
                 # Update mask with connected components
                 mask_image = cc_image
@@ -383,6 +383,8 @@ def main():
         label_target.mkdir(parents=True, exist_ok=True)
         test_data_target = task_data_dir / "raw_splitted" / "imagesTs"
         test_data_target.mkdir(parents=True, exist_ok=True)
+        test_label_target = task_data_dir / "raw_splitted" / "labelsTs"
+        test_label_target.mkdir(parents=True, exist_ok=True)
         logger.info("✓ Output directories created")
 
         # Configuration
@@ -395,8 +397,8 @@ def main():
             "name": "PI-CAI",
             "task": "Task022_PICAI",
             "target_class": None,
-            "test_labels": False,
-            "labels": {"0": "background", "1": "csPCa_lesion"},
+            "test_labels": True,
+            "labels": {"0": "csPCa_lesion"},
             "modalities": {"0": "T2w", "1": "ADC", "2": "HBV"},
             "dim": 3,
             "info": "PI-CAI dataset for prostate cancer detection and localization. Custom train/test splits applied.",
@@ -445,7 +447,7 @@ def main():
                 images_dir=images_dir,
                 labels_dir=labels_dir,
                 data_target=test_data_target,
-                label_target=label_target,  # Labels go to labelsTr even for test cases
+                label_target=test_label_target,
                 modalities=modalities,
             )
             if success:
