@@ -6,6 +6,8 @@ import time
 import traceback
 from pathlib import Path
 from typing import Dict, List
+from itertools import repeat
+from multiprocessing.pool import Pool
 
 import numpy as np
 import SimpleITK as sitk
@@ -48,7 +50,6 @@ def prepare_case(
 
         # Load modalities
         images = {}
-        reference_image = None
 
         for modality in modalities:
             modality_file = patient_dir / f"{case_id}_{modality}.mha"
@@ -62,11 +63,9 @@ def prepare_case(
             image = load_sitk(str(modality_file))
             images[modality] = image
 
-            # Use first modality as reference (typically t2w)
-            if reference_image is None:
-                reference_image = image
 
         # Resample all other modalities to reference space (t2w)
+        reference_image = images['t2w'] 
         resampler = sitk.ResampleImageFilter()
         resampler.SetReferenceImage(reference_image)
 
@@ -319,7 +318,14 @@ def main():
         required=True,
         help="Path to output directory (will contain entire output structure)"
     )
-
+    parser.add_argument(
+        '-np',
+        '--num_processes',
+        type=int, 
+        default=4,
+        required=False,
+        help="Number of processes to use",
+                        )
     args = parser.parse_args()
 
     overall_start_time = time.time()
@@ -424,34 +430,64 @@ def main():
         train_total = len(splits["train"])
         train_success = 0
 
-        for i, case_id in enumerate(tqdm(splits["train"], desc="Training cases")):
-            success = prepare_case(
-                case_id=case_id,
-                images_dir=images_dir,
-                labels_dir=labels_dir,
-                data_target=data_target,
-                label_target=label_target,
-                modalities=modalities,
-            )
-            if success:
-                train_success += 1
+        if args.num_processes == 0:
+            for _, case_id in enumerate(tqdm(splits["train"], desc="Training cases")):
+                success = prepare_case(
+                    case_id=case_id,
+                    images_dir=images_dir,
+                    labels_dir=labels_dir,
+                    data_target=data_target,
+                    label_target=label_target,
+                    modalities=modalities,
+                )
+                if success:
+                    train_success += 1
+        else:
+            logger.info(f"Processing {train_total} train cases with {args.num_processes} processes")
+            with Pool(processes=args.num_processes) as p:
+                results = p.starmap(prepare_case,
+                                    zip(
+                                        splits["train"],       
+                                        repeat(images_dir),     
+                                        repeat(labels_dir),     
+                                        repeat(data_target),    
+                                        repeat(label_target),   
+                                        repeat(modalities),    
+                                        )
+                                    )
+                train_success = sum(results)
 
         # Phase 5: Process test cases
         logger.info("\n🧪 PHASE 5: Processing Test Cases")
         test_total = len(splits["test"])
         test_success = 0
 
-        for i, case_id in enumerate(tqdm(splits["test"], desc="Test cases")):
-            success = prepare_case(
-                case_id=case_id,
-                images_dir=images_dir,
-                labels_dir=labels_dir,
-                data_target=test_data_target,
-                label_target=test_label_target,
-                modalities=modalities,
-            )
-            if success:
-                test_success += 1
+        if args.num_processes== 0:
+            for i, case_id in enumerate(tqdm(splits["test"], desc="Test cases")):
+                success = prepare_case(
+                    case_id=case_id,
+                    images_dir=images_dir,
+                    labels_dir=labels_dir,
+                    data_target=test_data_target,
+                    label_target=test_label_target,
+                    modalities=modalities,
+                )
+                if success:
+                    test_success += 1
+        else:
+            logger.info(f"Processing {test_total} train cases with {args.num_processes} processes")
+            with Pool(processes=args.num_processes) as p:
+                results = p.starmap(prepare_case,
+                                    zip(
+                                        splits["test"],
+                                        repeat(images_dir),
+                                        repeat(labels_dir),
+                                        repeat(test_data_target),
+                                        repeat(test_label_target),
+                                        repeat(modalities),
+                                    ))
+                test_success = sum(results)
+
 
         # Create nnDetection format splits
         final_splits = {

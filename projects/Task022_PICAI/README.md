@@ -34,8 +34,7 @@ picai_labels/
 
 ## Custom Splits
 
-This preparation script uses custom train/test splits from:
-`/home/marcizzz/unisr/UC16-PROSTATE-imaging/pre-process/data-split/test.json`
+This preparation script is able to handle a custom train-test split file that can be passed at runtime with `--splits_file` argument.
 
 The splits file should contain:
 ```json
@@ -54,12 +53,13 @@ The script performs the following steps:
 1. **Case Discovery**: Scans the dataset to find all valid cases with complete modalities
 2. **Image Processing**: 
    - Loads all three modalities (T2w, ADC, HBV) per case
-   - Resamples ADC and HBV to match T2w spatial resolution
+   - **Resamples ADC and HBV to match T2w spatial resolution**
+   - **No center cropping is performed**
    - Saves images with modality indexing (0000=T2w, 0001=ADC, 0002=HBV)
 3. **Label Processing**:
    - Loads lesion masks and resamples to match image space
    - Performs connected component analysis to create instance segmentation
-   - Generates instance metadata (all lesions are class 1: csPCa)
+   - Generates instance metadata (all lesions are class 0: csPCa) https://github.com/MIC-DKFZ/nnDetection/issues/276
    - Creates empty labels for test cases without annotations
 4. **Split Application**: Applies custom train/test splits
 5. **Output Generation**: Creates nnDetection-compatible directory structure
@@ -80,7 +80,12 @@ export OMP_NUM_THREADS=1
 
 ```bash
 cd /path/to/nnDetection/projects/Task022_PICAI/scripts
-python prepare.py
+python prepare.py \
+      --source-image-dir <path-to-raw-images> \
+      --source-labels-dir <path-to-raw-labels> \
+      --output-dir <path-to-output-directory> \
+      --splits_file <path-to-custom-splits> \
+      -npp <number-of-processes> # defaults to 4
 ```
 
 ### Expected Output
@@ -113,12 +118,11 @@ $det_data/Task022_PICAI/
 - **Name**: PI-CAI
 - **Dimensions**: 3D
 - **Classes**: 
-  - 0: Background
-  - 1: csPCa lesion
+  - 0: csPCa lesion
 - **Modalities**:
-  - 0: T2w (T2-weighted)
-  - 1: ADC (Apparent Diffusion Coefficient)
-  - 2: HBV (High b-value DWI)
+  - 000: T2w (T2-weighted)
+  - 001: ADC (Apparent Diffusion Coefficient)
+  - 002: HBV (High b-value DWI)
 
 ## Key Features
 
