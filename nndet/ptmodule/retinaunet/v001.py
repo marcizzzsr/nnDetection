@@ -24,6 +24,8 @@ from nndet.arch.heads.segmenter import DiCESegmenterFgBg
 from nndet.arch.conv import ConvInstanceRelu, ConvGroupRelu
 from nndet.arch.heads.classifier import FocalClassifier
 from nndet.arch.heads.comb import DetectionHeadHNMNativeRegAll
+from nndet.arch.heads.comb import BoxHeadNoSampler
+from nndet.arch.heads.segmenter import SymmetricUFLSegmenter
 
 
 from nndet.ptmodule import MODULE_REGISTRY
@@ -52,3 +54,15 @@ class RetinaUNetV001Focal(RetinaUNetModule):
     head_regressor_cls = GIoURegressor
     matcher_cls = ATSSMatcher
     segmenter_cls = DiCESegmenterFgBg
+
+
+@MODULE_REGISTRY.register
+class RetinaUNetV001UnifiedFocal(RetinaUNetModule):
+    base_conv_cls = ConvInstanceRelu
+    head_conv_cls = ConvGroupRelu
+
+    head_cls = BoxHeadNoSampler
+    head_classifier_cls = FocalClassifier
+    head_regressor_cls = GIoURegressor
+    matcher_cls = ATSSMatcher
+    segmenter_cls = SymmetricUFLSegmenter

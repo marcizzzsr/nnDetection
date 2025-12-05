@@ -24,15 +24,22 @@ from nndet.arch.conv import compute_padding_for_kernel, conv_kwargs_helper
 from nndet.arch.heads.comb import AbstractHead
 from nndet.arch.layers.interpolation import InterpolateToShapes
 from nndet.losses.segmentation import SoftDiceLoss, TopKLoss
+from nndet.losses.unified_focal_loss import (
+    SymmetricFocalTverskyLoss,
+    SymmetricFocalLoss,
+    AsymmetricFocalTverskyLoss,
+    AsymmetricFocalLoss
+)
 
 
 class Segmenter(AbstractHead):
-    def __init__(self,
-                 seg_classes: int,
-                 in_channels: Sequence[int],
-                 decoder_levels: Sequence[int],
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        seg_classes: int,
+        in_channels: Sequence[int],
+        decoder_levels: Sequence[int],
+        **kwargs,
+    ):
         """
         Abstract interface for segmentation head
 
@@ -49,21 +56,22 @@ class Segmenter(AbstractHead):
 
 
 class DiCESegmenter(Segmenter):
-    def __init__(self,
-                 conv,
-                 seg_classes: int,
-                 in_channels: Sequence[int],
-                 decoder_levels: Sequence[int],
-                 internal_channels: Optional[int] = None,
-                 num_internal: int = 0,
-                 add_norm: bool = True,
-                 add_act: bool= True,
-                 kernel_size: Union[int, Sequence[int]] = 3,
-                 alpha: float = 0.5,
-                 ce_kwargs: Optional[dict] = None,
-                 dice_kwargs: Optional[dict] = None,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        conv,
+        seg_classes: int,
+        in_channels: Sequence[int],
+        decoder_levels: Sequence[int],
+        internal_channels: Optional[int] = None,
+        num_internal: int = 0,
+        add_norm: bool = True,
+        add_act: bool = True,
+        kernel_size: Union[int, Sequence[int]] = 3,
+        alpha: float = 0.5,
+        ce_kwargs: Optional[dict] = None,
+        dice_kwargs: Optional[dict] = None,
+        **kwargs,
+    ):
         """
         Basic Segmentation Head with dice and CE loss
         (num_internal x conv [kernel_size]) -> final conv [1x1]
@@ -87,9 +95,9 @@ class DiCESegmenter(Segmenter):
             seg_classes=seg_classes,
             in_channels=in_channels,
             decoder_levels=decoder_levels,
-            )
+        )
         self.num_internal = num_internal
-        
+
         if internal_channels is None:
             self.internal_channels = self.in_channels[0]
         else:
@@ -122,7 +130,9 @@ class DiCESegmenter(Segmenter):
         """
         Build output convolution
         """
-        _intermediate_channels = self.internal_channels if self.num_internal > 0 else self.in_channels[0]
+        _intermediate_channels = (
+            self.internal_channels if self.num_internal > 0 else self.in_channels[0]
+        )
         return conv(
             _intermediate_channels,
             self.seg_classes,
@@ -131,15 +141,16 @@ class DiCESegmenter(Segmenter):
             add_norm=None,
             add_act=None,
             bias=True,
-            )
+        )
 
-    def build_conv_internal(self,
-                            conv,
-                            kernel_size: Union[int, Tuple[int]],
-                            add_norm: bool,
-                            add_act: bool,
-                            **kwargs,
-                            ) -> Optional[nn.Module]:
+    def build_conv_internal(
+        self,
+        conv,
+        kernel_size: Union[int, Tuple[int]],
+        add_norm: bool,
+        add_act: bool,
+        **kwargs,
+    ) -> Optional[nn.Module]:
         """
         Buld internal convolutions
         """
@@ -157,16 +168,17 @@ class DiCESegmenter(Segmenter):
                         stride=1,
                         add_norm=add_norm,
                         add_act=add_act,
-                        **kwargs
-                        )
-                    )
+                        **kwargs,
+                    ),
+                )
         else:
             _intermediate = None
         return _intermediate
 
-    def forward(self,
-                x: List[torch.Tensor],
-                ) -> Dict[str, torch.Tensor]:
+    def forward(
+        self,
+        x: List[torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
         """
         Forward pass
 
@@ -181,10 +193,11 @@ class DiCESegmenter(Segmenter):
             x = self.conv_intermediate(x)
         return {"seg_logits": self.conv_out(x)}
 
-    def compute_loss(self,
-                     pred_seg: Dict[str, torch.Tensor],
-                     target: torch.Tensor,
-                     ) -> Dict[str, torch.Tensor]:
+    def compute_loss(
+        self,
+        pred_seg: Dict[str, torch.Tensor],
+        target: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
         """
         Compute weighted dice and cross entropy loss
 
@@ -200,12 +213,14 @@ class DiCESegmenter(Segmenter):
         return {
             "seg_ce": self.alpha * self.ce_loss(seg_logits, target.long()),
             "seg_dice": (1 - self.alpha) * self.dice_loss(seg_logits, target),
-            }
+        }
 
-    def postprocess_for_inference(self,
-                                  prediction: Dict[str, torch.Tensor],
-                                  *args, **kwargs,
-                                  ) -> Dict[str, torch.Tensor]:
+    def postprocess_for_inference(
+        self,
+        prediction: Dict[str, torch.Tensor],
+        *args,
+        **kwargs,
+    ) -> Dict[str, torch.Tensor]:
         """
         Postprocess predictions for inference e.g. convert logits to probs
 
@@ -221,19 +236,20 @@ class DiCESegmenter(Segmenter):
 
 
 class DiCESegmenterFgBg(DiCESegmenter):
-    def __init__(self,
-                 conv,
-                 seg_classes: int,
-                 in_channels: Sequence[int],
-                 decoder_levels: Sequence[int],
-                 internal_channels: Optional[int] = None,
-                 num_internal: int = 0,
-                 add_norm: bool = True,
-                 add_act: bool= True,
-                 kernel_size: Union[int, Sequence[int]] = 3,
-                 alpha: float = 0.5,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        conv,
+        seg_classes: int,
+        in_channels: Sequence[int],
+        decoder_levels: Sequence[int],
+        internal_channels: Optional[int] = None,
+        num_internal: int = 0,
+        add_norm: bool = True,
+        add_act: bool = True,
+        kernel_size: Union[int, Sequence[int]] = 3,
+        alpha: float = 0.5,
+        **kwargs,
+    ):
         """
         Basic Segmentation Head with dice and CE loss which only
         differentiates foreground and background
@@ -255,25 +271,27 @@ class DiCESegmenterFgBg(DiCESegmenter):
 
         Warnings:
             If this class is used, the reportet dice scores during training
-            are wrong if multiple classes are present in the dataset. 
+            are wrong if multiple classes are present in the dataset.
         """
-        super().__init__(conv=conv,
-                         in_channels=in_channels,
-                         seg_classes=1,
-                         decoder_levels=decoder_levels,
-                         internal_channels=internal_channels,
-                         num_internal=num_internal,
-                         add_norm=add_norm,
-                         add_act=add_act,
-                         kernel_size=kernel_size,
-                         alpha=alpha,
-                         **kwargs,
-                         )
+        super().__init__(
+            conv=conv,
+            in_channels=in_channels,
+            seg_classes=1,
+            decoder_levels=decoder_levels,
+            internal_channels=internal_channels,
+            num_internal=num_internal,
+            add_norm=add_norm,
+            add_act=add_act,
+            kernel_size=kernel_size,
+            alpha=alpha,
+            **kwargs,
+        )
 
-    def compute_loss(self,
-                     pred_seg: Dict[str, torch.Tensor],
-                     target: torch.Tensor,
-                     ) -> Dict[str, torch.Tensor]:
+    def compute_loss(
+        self,
+        pred_seg: Dict[str, torch.Tensor],
+        target: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
         """
         Compute weighted dice and cross entropy loss
 
@@ -290,20 +308,21 @@ class DiCESegmenterFgBg(DiCESegmenter):
 
 
 class DiceTopKSegmenter(DiCESegmenter):
-    def __init__(self,
-                 conv,
-                 seg_classes: int,
-                 in_channels: Sequence[int],
-                 decoder_levels: Sequence[int],
-                 internal_channels: Optional[int] = None,
-                 num_internal: int = 0,
-                 add_norm: bool = True,
-                 add_act: bool= True,
-                 kernel_size: Union[int, Sequence[int]] = 3,
-                 alpha: float = 0.5,
-                 topk: float = 0.1,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        conv,
+        seg_classes: int,
+        in_channels: Sequence[int],
+        decoder_levels: Sequence[int],
+        internal_channels: Optional[int] = None,
+        num_internal: int = 0,
+        add_norm: bool = True,
+        add_act: bool = True,
+        kernel_size: Union[int, Sequence[int]] = 3,
+        alpha: float = 0.5,
+        topk: float = 0.1,
+        **kwargs,
+    ):
         """
         Basic Segmentation Head with dice and TopK loss
         (num_internal x conv [kernel_size]) -> final conv [1x1]
@@ -323,39 +342,39 @@ class DiceTopKSegmenter(DiCESegmenter):
             ce_kwargs: keyword arguments passed to CE loss
             topk: percentage of all entries to use for loss computation
         """
-        super().__init__(conv=conv,
-                    in_channels=in_channels,
-                    seg_classes=seg_classes,
-                    decoder_levels=decoder_levels,
-                    internal_channels=internal_channels,
-                    num_internal=num_internal,
-                    add_norm=add_norm,
-                    add_act=add_act,
-                    kernel_size=kernel_size,
-                    alpha=alpha,
-                    ce_kwargs=None,
-                    **kwargs,
-                    )
-        self.ce_loss = TopKLoss(
-            topk=topk
+        super().__init__(
+            conv=conv,
+            in_channels=in_channels,
+            seg_classes=seg_classes,
+            decoder_levels=decoder_levels,
+            internal_channels=internal_channels,
+            num_internal=num_internal,
+            add_norm=add_norm,
+            add_act=add_act,
+            kernel_size=kernel_size,
+            alpha=alpha,
+            ce_kwargs=None,
+            **kwargs,
         )
+        self.ce_loss = TopKLoss(topk=topk)
 
 
 class DiceTopKSegmenterFgBg(DiCESegmenterFgBg):
-    def __init__(self,
-                 conv,
-                 seg_classes: int,
-                 in_channels: Sequence[int],
-                 decoder_levels: Sequence[int],
-                 internal_channels: Optional[int] = None,
-                 num_internal: int = 0,
-                 add_norm: bool = True,
-                 add_act: bool= True,
-                 kernel_size: Union[int, Sequence[int]] = 3,
-                 alpha: float = 0.5,
-                 topk: float = 0.1,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        conv,
+        seg_classes: int,
+        in_channels: Sequence[int],
+        decoder_levels: Sequence[int],
+        internal_channels: Optional[int] = None,
+        num_internal: int = 0,
+        add_norm: bool = True,
+        add_act: bool = True,
+        kernel_size: Union[int, Sequence[int]] = 3,
+        alpha: float = 0.5,
+        topk: float = 0.1,
+        **kwargs,
+    ):
         """
         Basic Segmentation Head with dice and CE loss which only
         differentiates foreground and background
@@ -377,40 +396,40 @@ class DiceTopKSegmenterFgBg(DiCESegmenterFgBg):
 
         Warnings:
             If this class is used, the reportet dice scores during training
-            are wrong if multiple classes are present in the dataset. 
+            are wrong if multiple classes are present in the dataset.
         """
-        super().__init__(conv=conv,
-                         in_channels=in_channels,
-                         seg_classes=seg_classes,
-                         decoder_levels=decoder_levels,
-                         internal_channels=internal_channels,
-                         num_internal=num_internal,
-                         add_norm=add_norm,
-                         add_act=add_act,
-                         kernel_size=kernel_size,
-                         alpha=alpha,
-                         **kwargs,
-                         )
-        self.ce_loss = TopKLoss(
-            topk=topk
+        super().__init__(
+            conv=conv,
+            in_channels=in_channels,
+            seg_classes=seg_classes,
+            decoder_levels=decoder_levels,
+            internal_channels=internal_channels,
+            num_internal=num_internal,
+            add_norm=add_norm,
+            add_act=add_act,
+            kernel_size=kernel_size,
+            alpha=alpha,
+            **kwargs,
         )
+        self.ce_loss = TopKLoss(topk=topk)
 
 
 class DeepSupervisionSegmenterFGBG(DiCESegmenterFgBg):
-    def __init__(self,
-                 conv,
-                 seg_classes: int,
-                 in_channels: Sequence[int],
-                 decoder_levels: Sequence[int],
-                 internal_channels: Optional[int] = None,
-                 num_internal: int = 0,
-                 add_norm: bool = True,
-                 add_act: bool= True,
-                 kernel_size: Union[int, Sequence[int]] = 3,
-                 alpha: float = 0.5,
-                 dsv_weight: float = 1.,
-                 **kwargs,
-                 ):
+    def __init__(
+        self,
+        conv,
+        seg_classes: int,
+        in_channels: Sequence[int],
+        decoder_levels: Sequence[int],
+        internal_channels: Optional[int] = None,
+        num_internal: int = 0,
+        add_norm: bool = True,
+        add_act: bool = True,
+        kernel_size: Union[int, Sequence[int]] = 3,
+        alpha: float = 0.5,
+        dsv_weight: float = 1.0,
+        **kwargs,
+    ):
         """
         Deep supervision segmenation which trains with CE and Dice
         to differentitate foreground and background
@@ -432,34 +451,37 @@ class DeepSupervisionSegmenterFGBG(DiCESegmenterFgBg):
             dice_kwargs: keyword arguments passed to dice loss
             dsv_weight: additional weight for dsv losses
         """
-        super().__init__(conv=conv,
-                    in_channels=in_channels,
-                    seg_classes=1,
-                    decoder_levels=decoder_levels,
-                    internal_channels=internal_channels,
-                    num_internal=num_internal,
-                    add_norm=add_norm,
-                    add_act=add_act,
-                    kernel_size=kernel_size,
-                    alpha=alpha,
-                    **kwargs,
-                    )
+        super().__init__(
+            conv=conv,
+            in_channels=in_channels,
+            seg_classes=1,
+            decoder_levels=decoder_levels,
+            internal_channels=internal_channels,
+            num_internal=num_internal,
+            add_norm=add_norm,
+            add_act=add_act,
+            kernel_size=kernel_size,
+            alpha=alpha,
+            **kwargs,
+        )
 
         assert len(self.decoder_levels) > 0
-        self.dsv_conv = conv(self.in_channels[-1],
-                             2,
-                             kernel_size=3,
-                             padding=1,
-                             add_norm=False,
-                             add_act=False,
-                             bias=True,
-                             )
+        self.dsv_conv = conv(
+            self.in_channels[-1],
+            2,
+            kernel_size=3,
+            padding=1,
+            add_norm=False,
+            add_act=False,
+            bias=True,
+        )
         self.interpolator = InterpolateToShapes()
         self.dsv_weight = dsv_weight
 
-    def forward(self,
-                x: List[torch.Tensor],
-                ) -> Dict[str, torch.Tensor]:
+    def forward(
+        self,
+        x: List[torch.Tensor],
+    ) -> Dict[str, torch.Tensor]:
         """
         Forward pass
 
@@ -479,10 +501,11 @@ class DeepSupervisionSegmenterFGBG(DiCESegmenterFgBg):
             predictions[f"dsv_logits_{dl}"] = self.dsv_conv(x[dl])
         return predictions
 
-    def compute_loss(self,
-                     pred_seg: Dict[str, torch.Tensor],
-                     target: torch.Tensor,
-                     ) -> Dict[str, torch.Tensor]:
+    def compute_loss(
+        self,
+        pred_seg: Dict[str, torch.Tensor],
+        target: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
         """
         Compute weighted dice and cross entropy loss
 
@@ -498,7 +521,9 @@ class DeepSupervisionSegmenterFGBG(DiCESegmenterFgBg):
 
         loss = self._compute_loss(pred_seg["seg_logits"], target)
 
-        preds_decoder_level = [pred_seg[f"dsv_logits_{dl}"] for dl in self.decoder_levels]
+        preds_decoder_level = [
+            pred_seg[f"dsv_logits_{dl}"] for dl in self.decoder_levels
+        ]
         targets_interpolated = self.interpolator(preds_decoder_level, target)
 
         for pred, target in zip(preds_decoder_level, targets_interpolated):
@@ -507,8 +532,189 @@ class DeepSupervisionSegmenterFGBG(DiCESegmenterFgBg):
         return {"seg_loss": loss / (len(self.decoder_levels) + 1)}
 
     def _compute_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        return self.alpha * self.ce_loss(pred, target.long()) + \
-            (1 - self.alpha) * self.dice_loss(pred, target)
+        return self.alpha * self.ce_loss(pred, target.long()) + (
+            1 - self.alpha
+        ) * self.dice_loss(pred, target)
 
 
-SegmenterType = TypeVar('SegmenterType', bound=Segmenter)
+SegmenterType = TypeVar("SegmenterType", bound=Segmenter)
+
+
+class SymmetricUFLSegmenter(DiCESegmenter):
+    def __init__(
+        self,
+        conv,
+        seg_classes,
+        in_channels,
+        decoder_levels,
+        internal_channels=None,
+        num_internal=0,
+        add_norm=True,
+        add_act=True,
+        kernel_size=3,
+        alpha=0.5,
+        ce_kwargs=None,
+        dice_kwargs=None,
+        loss_weight=1.0,
+        delta=0.6,
+        gamma=0.5,
+        reduction="mean",
+        **kwargs,
+    ):
+        """
+        SymmetricUFLSegmenter is a segmentation head that combines symmetric focal loss and symmetric focal Tversky loss for robust segmentation, particularly in imbalanced scenarios.
+        Inherits from:
+            DiCESegmenter
+        Args:
+            conv (nn.Module): Convolutional layer to use in the segmentation head.
+            seg_classes (int): Number of segmentation classes.
+            in_channels (int): Number of input channels.
+            decoder_levels (int): Number of decoder levels.
+            internal_channels (Optional[int]): Number of internal channels for intermediate layers.
+            num_internal (int): Number of internal layers.
+            add_norm (bool): Whether to add normalization layers.
+            add_act (bool): Whether to add activation layers.
+            kernel_size (int): Kernel size for convolutional layers.
+            alpha (float): Weighting factor between CE and Dice losses (0.0 = only Dice, 1.0 = only CE).
+            ce_kwargs (Optional[dict]): Additional keyword arguments for the CE loss.
+            dice_kwargs (Optional[dict]): Additional keyword arguments for the Dice loss.
+            loss_weight (float): Weight applied to the total loss.
+            delta (float): Delta parameter for the symmetric focal losses.
+            gamma (float): Gamma parameter for the symmetric focal losses.
+            reduction (str): Reduction method for the losses ('mean', 'sum', etc.).
+            **kwargs: Additional keyword arguments.
+        Attributes:
+            loss_weight (float): Weight applied to the total loss.
+            ce_loss (SymmetricFocalLoss): Symmetric focal loss instance for cross-entropy.
+            dice_loss (SymmetricFocalTverskyLoss): Symmetric focal Tversky loss instance.
+        Methods:
+            compute_loss(pred_seg: Dict[str, torch.Tensor], target: torch.Tensor) -> Dict[str, torch.Tensor]:
+                Computes the segmentation loss as a weighted sum of symmetric focal loss and symmetric focal Tversky loss.
+                Args:
+                    pred_seg (Dict[str, torch.Tensor]): Dictionary containing segmentation logits.
+                    target (torch.Tensor): Ground truth segmentation mask.
+                Returns:
+                    Dict[str, torch.Tensor]: Dictionary with computed loss components.
+        """
+        super().__init__(
+            conv,
+            seg_classes,
+            in_channels,
+            decoder_levels,
+            internal_channels,
+            num_internal,
+            add_norm,
+            add_act,
+            kernel_size,
+            alpha,
+            ce_kwargs,
+            dice_kwargs,
+            **kwargs,
+        )
+
+        self.loss_weight = loss_weight
+
+        self.ce_loss = SymmetricFocalLoss(
+            delta=delta,
+            gamma=gamma,
+            reduction=reduction,
+            nonlin=torch.nn.Softmax(dim=1),
+        )
+        self.dice_loss = SymmetricFocalTverskyLoss(
+            delta=delta,
+            gamma=gamma,
+            reduction=reduction,
+            nonlin=torch.nn.Softmax(dim=1),
+        )
+
+    def compute_loss(
+        self,
+        pred_seg: Dict[str, torch.Tensor],
+        target: torch.Tensor,
+    ) -> Dict[str, torch.Tensor]:
+        target[target > 0] = 1  # skip multiclass
+        seg_logits = pred_seg["seg_logits"]
+        return {
+            "seg_ce": self.alpha * self.ce_loss(seg_logits, target.long()),
+            "seg_dice": (1 - self.alpha) * self.dice_loss(seg_logits, target),
+        }
+
+
+class AsymmetricUFLSegmenter(SymmetricUFLSegmenter):
+    def __init__(
+        self,
+        conv,
+        seg_classes,
+        in_channels,
+        decoder_levels,
+        internal_channels=None,
+        num_internal=0,
+        add_norm=True,
+        add_act=True,
+        kernel_size=3,
+        alpha=0.5,
+        ce_kwargs=None,
+        dice_kwargs=None,
+        loss_weight=1,
+        delta=0.6,
+        gamma=0.5,
+        reduction="mean",
+        **kwargs,
+    ):
+        """
+        Initializes the segmenter head with specified configuration.
+
+        Args:
+            conv (nn.Module): Convolutional layer to use in the head.
+            seg_classes (int): Number of segmentation classes.
+            in_channels (int): Number of input channels.
+            decoder_levels (int): Number of decoder levels.
+            internal_channels (Optional[int], optional): Number of internal channels. Defaults to None.
+            num_internal (int, optional): Number of internal layers. Defaults to 0.
+            add_norm (bool, optional): Whether to add normalization layers. Defaults to True.
+            add_act (bool, optional): Whether to add activation layers. Defaults to True.
+            kernel_size (int, optional): Kernel size for convolutional layers. Defaults to 3.
+            alpha (float, optional): Weighting factor for loss calculation. Defaults to 0.5.
+            ce_kwargs (Optional[dict], optional): Additional keyword arguments for cross-entropy loss. Defaults to None.
+            dice_kwargs (Optional[dict], optional): Additional keyword arguments for dice loss. Defaults to None.
+            loss_weight (float, optional): Weight for the loss function. Defaults to 1.
+            delta (float, optional): Delta parameter for asymmetric loss functions. Defaults to 0.6.
+            gamma (float, optional): Gamma parameter for asymmetric loss functions. Defaults to 0.5.
+            reduction (str, optional): Reduction method for loss ('mean', 'sum', etc.). Defaults to "mean".
+            **kwargs: Additional keyword arguments.
+
+        Attributes:
+            ce_loss (AsymmetricFocalLoss): Asymmetric focal loss with softmax nonlinearity.
+            dice_loss (AsymmetricFocalTverskyLoss): Asymmetric focal Tversky loss with softmax nonlinearity.
+        
+        Methods:
+            compute_loss(pred_seg: Dict[str, torch.Tensor], target: torch.Tensor) -> Dict[str, torch.Tensor]:
+                Computes the segmentation loss as a weighted sum of asymmetric focal loss and asymmetric focal Tversky loss.
+                Args:
+                    pred_seg (Dict[str, torch.Tensor]): Dictionary containing segmentation logits.
+                    target (torch.Tensor): Ground truth segmentation mask.
+                Returns:
+                    Dict[str, torch.Tensor]: Dictionary with computed loss components.
+        """
+        super().__init__(
+            conv,
+            seg_classes,
+            in_channels,
+            decoder_levels,
+            internal_channels,
+            num_internal,
+            add_norm,
+            add_act,
+            kernel_size,
+            alpha,
+            ce_kwargs,
+            dice_kwargs,
+            loss_weight,
+            delta,
+            gamma,
+            reduction,
+            **kwargs,
+        )
+
+        self.ce_loss = AsymmetricFocalLoss(delta=delta, gamma=gamma, reduction=reduction, nonlin=torch.nn.Softmax(dim=1))
+        self.dice_loss = AsymmetricFocalTverskyLoss(delta=delta, gamma=gamma, reduction=reduction, nonlin=torch.nn.Softmax(dim=1))

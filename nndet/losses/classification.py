@@ -35,7 +35,7 @@ def one_hot_smooth(data,
     return targets
 
 
-@torch.jit.script
+
 def focal_loss_with_logits(
         logits: torch.Tensor,
         target: torch.Tensor, gamma: float,
