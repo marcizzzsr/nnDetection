@@ -6,7 +6,7 @@ defaults:
 exp:
   tag: ""
   fold: 0
-  id: ${module}_${plan}${exp.tag}
+  id: ${module}_${plan}_${exp.tag}
 
 train:
   mode: "overwrite" # can be either `overwrite` or `resume`

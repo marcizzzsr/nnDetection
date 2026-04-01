@@ -13,7 +13,7 @@
 #limitations under the License.
 
 # Contains pytorch, torchvision, cuda, cudnn
-FROM nvcr.io/nvidia/pytorch:23.03-py3
+FROM nvcr.io/nvidia/pytorch:22.12-py3
 
 ARG env_det_num_threads=6
 ARG env_det_verbose=1
@@ -44,6 +44,7 @@ RUN mkdir ${det_data} \
   && mkdir ${det_models} \
   && mkdir -p /opt/code/nndet \
   && pip install -r requirements.txt  \
+  && pip uninstall torchtext -y \
   && pip install hydra-core --upgrade --pre \
   && pip install git+https://github.com/mibaumgartner/pytorch_model_summary.git
 

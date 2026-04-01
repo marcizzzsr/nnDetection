@@ -1,0 +1,48 @@
+{
+    "model_iou_1e-05": {
+        "state": "{'model_iou': 0.1, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "model_iou": "1e-05"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.574223602484472, 'FROC_score_IoU_0.50': 0.46304347826086956, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.41667574537278645, 'AP_IoU_0.10_MaxDet_100': 0.4508228020438242, 'AP_IoU_0.50_MaxDet_100': 0.34288798206218396}"
+    },
+    "model_iou_0_1": {
+        "state": "{'model_iou': 0.1, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "model_iou": "0.1"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5745341614906831, 'FROC_score_IoU_0.50': 0.4625776397515529, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.4161536849536231, 'AP_IoU_0.10_MaxDet_100': 0.4500712561374991, 'AP_IoU_0.50_MaxDet_100': 0.34173375362124625}"
+    },
+    "model_iou_0_2": {
+        "state": "{'model_iou': 0.1, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "model_iou": "0.2"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5722049689440993, 'FROC_score_IoU_0.50': 0.46257763975155275, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.41699772604154084, 'AP_IoU_0.10_MaxDet_100': 0.44949232332758826, 'AP_IoU_0.50_MaxDet_100': 0.3417845772496323}"
+    },
+    "model_iou_0_30000000000000004": {
+        "state": "{'model_iou': 0.1, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "model_iou": "0.30000000000000004"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5704968944099379, 'FROC_score_IoU_0.50': 0.4624223602484472, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.41684954612089653, 'AP_IoU_0.10_MaxDet_100': 0.44738151334078596, 'AP_IoU_0.50_MaxDet_100': 0.34458429231262294}"
+    },
+    "model_iou_0_4": {
+        "state": "{'model_iou': 0.1, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "model_iou": "0.4"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5650621118012423, 'FROC_score_IoU_0.50': 0.4647515527950311, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.41244484419418076, 'AP_IoU_0.10_MaxDet_100': 0.4426584906557962, 'AP_IoU_0.50_MaxDet_100': 0.34414528848114656}"
+    },
+    "model_iou_0_5": {
+        "state": "{'model_iou': 0.1, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "model_iou": "0.5"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5010869565217392, 'FROC_score_IoU_0.50': 0.412111801242236, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.35374509891555556, 'AP_IoU_0.10_MaxDet_100': 0.3798288907878802, 'AP_IoU_0.50_MaxDet_100': 0.29521575337045336}"
+    },
+    "best_model_iou": {
+        "value": "0.2",
+        "score": "0.41699772604154084"
+    }
+}

@@ -116,7 +116,15 @@ ENV/
 
 .DS_Store
 
-# SLURM stuff
-code-tunnel-config.yaml
-.overlays/python_overlay
-**/logs
+# Cluster stuff
+code-tunnel-config*
+**/debug/
+.overlays
+**/jobs
+.bash_history
+
+# Code Tunnel stuff
+code_tunnel.json
+token.json
+tunnel-stable.lock
+servers/

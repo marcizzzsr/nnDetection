@@ -25,7 +25,7 @@ from nndet.arch.conv import ConvInstanceRelu, ConvGroupRelu
 from nndet.arch.heads.classifier import FocalClassifier
 from nndet.arch.heads.comb import DetectionHeadHNMNativeRegAll
 from nndet.arch.heads.comb import BoxHeadNoSampler
-from nndet.arch.heads.segmenter import SymmetricUFLSegmenter
+from nndet.arch.heads.segmenter import SymmetricUFLSegmenter, AsymmetricUFLSegmenter
 
 
 from nndet.ptmodule import MODULE_REGISTRY
@@ -63,6 +63,28 @@ class RetinaUNetV001UnifiedFocal(RetinaUNetModule):
 
     head_cls = BoxHeadNoSampler
     head_classifier_cls = FocalClassifier
+    head_regressor_cls = GIoURegressor
+    matcher_cls = ATSSMatcher
+    segmenter_cls = SymmetricUFLSegmenter
+
+@MODULE_REGISTRY.register
+class RetinaUNetV001UnifiedFocalAsymmetric(RetinaUNetModule):
+    base_conv_cls = ConvInstanceRelu
+    head_conv_cls = ConvGroupRelu
+
+    head_cls = BoxHeadNoSampler
+    head_classifier_cls = FocalClassifier
+    head_regressor_cls = GIoURegressor
+    matcher_cls = ATSSMatcher
+    segmenter_cls = AsymmetricUFLSegmenter
+
+@MODULE_REGISTRY.register
+class RetinaUNetV001UnifiedFocalHNM(RetinaUNetModule):
+    base_conv_cls = ConvInstanceRelu
+    head_conv_cls = ConvGroupRelu
+
+    head_cls = DetectionHeadHNMNativeRegAll
+    head_classifier_cls = BCECLassifier # There is no sense in using FocalLoss here since HNM handles the same problem (FL might interfere)
     head_regressor_cls = GIoURegressor
     matcher_cls = ATSSMatcher
     segmenter_cls = SymmetricUFLSegmenter

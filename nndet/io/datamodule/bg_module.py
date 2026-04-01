@@ -214,11 +214,11 @@ class Datamodule(BaseModule):
                 "num_train_batches_per_epoch"],
             **self.dataloader_kwargs,
             )
-
+    
         tr_gen = get_augmenter(
             dataloader=dl_tr,
             transform=self.augmentation.get_training_transforms(),
-            num_processes=min(int(self.augment_cfg.get('num_threads', 12)), 16) - 1,
+            num_processes=min(int(self.augment_cfg.get('num_threads', 12)), os.cpu_count()) - 1,
             num_cached_per_queue=self.augment_cfg.get('num_cached_per_thread', 2),
             multiprocessing=self.augment_cfg.get("multiprocessing", True),
             seeds=None,
@@ -253,7 +253,7 @@ class Datamodule(BaseModule):
         val_gen = get_augmenter(
             dataloader=dl_val,
             transform=self.augmentation.get_validation_transforms(),
-            num_processes=min(int(self.augment_cfg.get('num_threads', 12)), 16) - 1,
+            num_processes=min(int(self.augment_cfg.get('num_threads', 12)), os.cpu_count()) - 1,
             num_cached_per_queue=self.augment_cfg.get('num_cached_per_thread', 2),
             multiprocessing=self.augment_cfg.get("multiprocessing", True),
             seeds=None,

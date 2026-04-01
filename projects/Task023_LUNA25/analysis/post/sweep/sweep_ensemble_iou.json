@@ -1,0 +1,48 @@
+{
+    "ensemble_iou_1e-05": {
+        "state": "{'model_iou': 0.2, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "ensemble_iou": "1e-05"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5172360248447204, 'FROC_score_IoU_0.50': 0.4093167701863355, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.3683180972048552, 'AP_IoU_0.10_MaxDet_100': 0.401354919455134, 'AP_IoU_0.50_MaxDet_100': 0.2888667098347946}"
+    },
+    "ensemble_iou_0_1": {
+        "state": "{'model_iou': 0.2, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "ensemble_iou": "0.1"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5310559006211181, 'FROC_score_IoU_0.50': 0.41847826086956524, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.3809259229445189, 'AP_IoU_0.10_MaxDet_100': 0.4144038609182923, 'AP_IoU_0.50_MaxDet_100': 0.2989537979033545}"
+    },
+    "ensemble_iou_0_2": {
+        "state": "{'model_iou': 0.2, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "ensemble_iou": "0.2"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5683229813664596, 'FROC_score_IoU_0.50': 0.45527950310559007, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.4149258100515799, 'AP_IoU_0.10_MaxDet_100': 0.4479586595789262, 'AP_IoU_0.50_MaxDet_100': 0.33275685998804794}"
+    },
+    "ensemble_iou_0_30000000000000004": {
+        "state": "{'model_iou': 0.2, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "ensemble_iou": "0.30000000000000004"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5886645962732919, 'FROC_score_IoU_0.50': 0.47251552795031054, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.4353866050295466, 'AP_IoU_0.10_MaxDet_100': 0.46995234280123865, 'AP_IoU_0.50_MaxDet_100': 0.352325136925435}"
+    },
+    "ensemble_iou_0_4": {
+        "state": "{'model_iou': 0.2, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "ensemble_iou": "0.4"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5897515527950311, 'FROC_score_IoU_0.50': 0.47236024844720503, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.4360540701241342, 'AP_IoU_0.10_MaxDet_100': 0.47005711734239564, 'AP_IoU_0.50_MaxDet_100': 0.3540936784984747}"
+    },
+    "ensemble_iou_0_5": {
+        "state": "{'model_iou': 0.2, 'model_nms_fn': <function batched_weighted_nms_model at 0x70123082bee0>, 'model_score_thresh': 0.0, 'model_topk': 1000, 'model_detections_per_image': 100, 'ensemble_iou': 0.5, 'ensemble_nms_fn': <function batched_wbc_ensemble at 0x7012307ce0d0>, 'ensemble_topk': 1000, 'remove_small_boxes': 0.01, 'ensemble_score_thresh': 0.0}",
+        "overwrite": {
+            "ensemble_iou": "0.5"
+        },
+        "scores": "{'FROC_score_IoU_0.10': 0.5722049689440993, 'FROC_score_IoU_0.50': 0.46257763975155275, 'mAP_IoU_0.10_0.50_0.05_MaxDet_100': 0.41699772604154084, 'AP_IoU_0.10_MaxDet_100': 0.44949232332758826, 'AP_IoU_0.50_MaxDet_100': 0.3417845772496323}"
+    },
+    "best_ensemble_iou": {
+        "value": "0.4",
+        "score": "0.4360540701241342"
+    }
+}

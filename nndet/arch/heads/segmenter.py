@@ -555,7 +555,8 @@ class SymmetricUFLSegmenter(DiCESegmenter):
         alpha=0.5,
         ce_kwargs=None,
         dice_kwargs=None,
-        loss_weight=1.0,
+        ce_weight=1.0,
+        seg_weight=1.0,
         delta=0.6,
         gamma=0.5,
         reduction="mean",
@@ -578,7 +579,8 @@ class SymmetricUFLSegmenter(DiCESegmenter):
             alpha (float): Weighting factor between CE and Dice losses (0.0 = only Dice, 1.0 = only CE).
             ce_kwargs (Optional[dict]): Additional keyword arguments for the CE loss.
             dice_kwargs (Optional[dict]): Additional keyword arguments for the Dice loss.
-            loss_weight (float): Weight applied to the total loss.
+            ce_weight (float, optional): Weight for the 'ce' component of loss function. Defaults to 1.
+            seg (float, optional): Weight for the 'seg' component of loss function. Defaults to 1.
             delta (float): Delta parameter for the symmetric focal losses.
             gamma (float): Gamma parameter for the symmetric focal losses.
             reduction (str): Reduction method for the losses ('mean', 'sum', etc.).
@@ -612,7 +614,8 @@ class SymmetricUFLSegmenter(DiCESegmenter):
             **kwargs,
         )
 
-        self.loss_weight = loss_weight
+        self.ce_weight = ce_weight
+        self.seg_weight = seg_weight
 
         self.ce_loss = SymmetricFocalLoss(
             delta=delta,
@@ -635,8 +638,8 @@ class SymmetricUFLSegmenter(DiCESegmenter):
         target[target > 0] = 1  # skip multiclass
         seg_logits = pred_seg["seg_logits"]
         return {
-            "seg_ce": self.alpha * self.ce_loss(seg_logits, target.long()),
-            "seg_dice": (1 - self.alpha) * self.dice_loss(seg_logits, target),
+            "seg_ce": self.ce_weight * self.alpha * self.ce_loss(seg_logits, target.long()),
+            "seg_dice": self.seg_weight * (1 - self.alpha) * self.dice_loss(seg_logits, target),
         }
 
 
@@ -655,7 +658,8 @@ class AsymmetricUFLSegmenter(SymmetricUFLSegmenter):
         alpha=0.5,
         ce_kwargs=None,
         dice_kwargs=None,
-        loss_weight=1,
+        ce_weight=1.0,
+        seg_weight=1.0,
         delta=0.6,
         gamma=0.5,
         reduction="mean",
@@ -677,7 +681,8 @@ class AsymmetricUFLSegmenter(SymmetricUFLSegmenter):
             alpha (float, optional): Weighting factor for loss calculation. Defaults to 0.5.
             ce_kwargs (Optional[dict], optional): Additional keyword arguments for cross-entropy loss. Defaults to None.
             dice_kwargs (Optional[dict], optional): Additional keyword arguments for dice loss. Defaults to None.
-            loss_weight (float, optional): Weight for the loss function. Defaults to 1.
+            ce_weight (float, optional): Weight for the 'ce' component of loss function. Defaults to 1.
+            seg (float, optional): Weight for the 'seg' component of loss function. Defaults to 1.
             delta (float, optional): Delta parameter for asymmetric loss functions. Defaults to 0.6.
             gamma (float, optional): Gamma parameter for asymmetric loss functions. Defaults to 0.5.
             reduction (str, optional): Reduction method for loss ('mean', 'sum', etc.). Defaults to "mean".
@@ -709,7 +714,8 @@ class AsymmetricUFLSegmenter(SymmetricUFLSegmenter):
             alpha,
             ce_kwargs,
             dice_kwargs,
-            loss_weight,
+            ce_weight,
+            seg_weight,
             delta,
             gamma,
             reduction,

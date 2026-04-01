@@ -24,6 +24,8 @@ from omegaconf import OmegaConf
 from loguru import logger
 from pathlib import Path
 
+from nndet.planning.experiment.utils import create_labels
+
 from nndet.utils.check import env_guard
 from nndet.planning import PLANNER_REGISTRY
 from nndet.io import get_task, get_training_dir
@@ -77,6 +79,13 @@ def run(cfg: dict,
             preprocessed_output_dir=preprocessed_output_dir,
             splitted_4d_output_dir=cfg["host"]["splitted_4d_output_dir"],
             plan=plan,
+            num_processes=num_processes,
+        )
+
+        # Temp workaround to create preprocessed/labelsTs directory
+        create_labels(
+            preprocessed_output_dir=preprocessed_output_dir,
+            source_dir=cfg["host"]["splitted_4d_output_dir"],
             num_processes=num_processes,
         )
 

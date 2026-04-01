@@ -1,0 +1,2 @@
+split,case_id,json_path,mask_path,status,mask_ids_count,json_ids_count,mask_ids,json_ids,missing_in_json,extra_in_json,missing_count,extra_count,has_mismatch,would_keyerror
+test,1_2_840_113654_2_55_100027385603639997812329606977270090953,/opt/data/beegfs/Task023_LUNA25/raw_splitted/labelsTs/1_2_840_113654_2_55_100027385603639997812329606977270090953.json,/opt/data/beegfs/Task023_LUNA25/raw_splitted/labelsTs/1_2_840_113654_2_55_100027385603639997812329606977270090953.nii.gz,ok,1,0,1,,1,,1,0,True,True

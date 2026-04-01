@@ -29,6 +29,8 @@ from nndet.losses.classification import (
     CrossEntropyLoss,
 )
 
+from nndet.losses.unified_focal_loss import SymmetricFocalLoss
+
 CONV_TYPES = (nn.Conv2d, nn.Conv3d)
 
 

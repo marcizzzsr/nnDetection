@@ -451,6 +451,8 @@ def symmetric_focal_tversky_loss(
 
     loss = torch.stack([back_dice, fore_dice], dim=1)
 
+    print(f"Symmetric Focal Tversky loss: {loss}")
+
     return reduction_helper(loss, reduction)
 
 
