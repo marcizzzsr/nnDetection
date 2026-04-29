@@ -2,124 +2,119 @@
 
 ## Overview
 
-Preparation script for the LUNA25 dataset for pulmonary nodule detection using nnDetection framework.
+Primary script: `scripts/prepare_fused.py`
 
-## Dataset Structure
+This standalone script prepares LUNA25 for nnDetection and combines:
+- full dataset assembly (`imagesTr/imagesTs`, `labelsTr/labelsTs`, `dataset.json`, `splits.json`)
+- robust MedSAM2 mask-to-label mapping diagnostics (coordinate fallback + local search + detailed conversion log)
 
-### Input Requirements
+Legacy scripts are still present for reference:
+- `scripts/prepare.py`
+- `scripts/prepare_MedSAMv2_masks.py`
 
-The script expects the following input structure:
+## Input Requirements
 
-```
+Expected input layout:
+
+```text
 LUNA25/
-├── luna25_images/              # Raw CT images in .mha format
-├── luna25_nodule_blocks/
-│   ├── image/                  # Nodule masks in .npy format
-│   └── metadata/               # Nodule metadata in .npy format
-└── luna25-annotations.csv      # Mapping between images and nodules
+├── luna25_images/              # CT volumes in .mha
+├── medsam2_masks/              # MedSAM2 instance masks in .nii/.nii.gz
+├── luna25-annotations.csv      # Lesion coordinates + labels
+├── luna25-train.csv            # Train split with SeriesInstanceUID
+└── luna25-test.csv             # Test split with SeriesInstanceUID
 ```
 
-### CSV Format
+Important:
+- The old `nodule_blocks` folder is not used in the current pipeline.
+- Masks are read from the MedSAM2 mask directory.
 
-The annotations CSV must contain the following columns:
-- `SeriesInstanceUID`: Unique identifier for each CT scan
-- `NoduleID`: Unique identifier for each nodule
-- `label`: Class label for the nodule (e.g., 0 or 1)
+## CSV Columns
 
-### Output Structure
+Required in annotations CSV:
+- `SeriesInstanceUID`
+- `CoordX`
+- `CoordY`
+- `CoordZ`
+- `label`
 
-The script generates the following nnDetection-compatible structure:
-
-```
-Task023_LUNA25/
-├── dataset.json                # Dataset metadata
-├── prepare.log                 # Detailed processing log
-├── raw_splitted/
-│   ├── imagesTr/              # Converted images (_0000.nii.gz)
-│   └── labelsTr/              # Instance masks (.nii.gz) and labels (.json)
-└── preprocessed/
-    ├── splits_final.pkl       # Train/validation splits (pickle)
-    └── splits_final.json      # Train/validation splits (JSON)
-```
+Required in train/test split CSVs:
+- `SeriesInstanceUID`
 
 ## Usage
 
-### Basic Command
+### Full pipeline
 
 ```bash
-python prepare_try.py \
-  -i /path/to/luna25_images \
-  -m /path/to/luna25_nodule_blocks/image \
-  -d /path/to/luna25_nodule_blocks/metadata \
-  -a /path/to/luna25-annotations.csv \
-  -o /path/to/output
+python scripts/prepare_fused.py \
+  --images /path/to/luna25_images \
+  --masks /path/to/medsam2_masks \
+  --csv /path/to/luna25-annotations.csv \
+  --train-csv /path/to/luna25-train.csv \
+  --test-csv /path/to/luna25-test.csv \
+  --output /path/to/output_root \
+  --jobs 8
 ```
 
-### Arguments
-
-| Argument | Short | Required | Description |
-|----------|-------|----------|-------------|
-| `--source-image-dir` | `-i` | Yes | Directory containing raw .mha images |
-| `--source-masks-dir` | `-m` | Yes | Directory containing nodule mask blocks (.npy) |
-| `--source-metadata-dir` | `-d` | Yes | Directory containing nodule metadata (.npy) |
-| `--annotations-csv` | `-a` | Yes | Path to annotations CSV file |
-| `--output-dir` | `-o` | Yes | Output directory path |
-| `--num_processes` | | No | Number of parallel processes (default: 4) |
-
-### Example
+### Labels only (skip image conversion)
 
 ```bash
-python prepare_try.py \
-  -i /opt/data/LUNA25/luna25_images \
-  -m /opt/data/LUNA25/luna25_nodule_blocks/image \
-  -d /opt/data/LUNA25/luna25_nodule_blocks/metadata \
-  -a /opt/data/luna25-annotations.csv \
-  -o /opt/data \
-  --num_processes 8
+python scripts/prepare_fused.py \
+  --images /path/to/luna25_images \
+  --masks /path/to/medsam2_masks \
+  --csv /path/to/luna25-annotations.csv \
+  --train-csv /path/to/luna25-train.csv \
+  --test-csv /path/to/luna25-test.csv \
+  --output /path/to/output_root \
+  --labels-only
 ```
 
-## Processing Steps
+### Useful options
 
-1. **Input Validation**: Verifies all input directories and CSV file exist and are properly formatted
-2. **CSV Validation**: Checks for required columns and reports data statistics
-3. **Image Conversion**: Converts .mha images to .nii.gz format with _0000 suffix
-4. **Mask Creation**: 
-   - Loads individual nodule masks and metadata
-   - Combines multiple nodules per image into instance segmentation masks
-   - Creates JSON files mapping instance IDs to class labels
-5. **Split Generation**: Creates 5-fold cross-validation splits based on unique series
+- `--local-search-radius`: radius for local voxel neighborhood search (default: `1`)
+- `--log-csv`: custom path for conversion CSV log
+- `--no-strict-instance-match`: allow partial mappings instead of failing mismatch cases
 
-## Output Files
+## Output Structure
 
-### Images
-- Format: `{SeriesInstanceUID}_0000.nii.gz`
-- Location: `raw_splitted/imagesTr/`
+```text
+Task023_LUNA25/
+├── dataset.json
+├── prepare.log
+├── conversion_log.csv
+└── raw_splitted/
+    ├── imagesTr/
+    ├── labelsTr/
+    ├── imagesTs/
+    ├── labelsTs/
+    └── splits.json
+```
 
-### Labels
-- Mask: `{SeriesInstanceUID}.nii.gz` (instance segmentation with unique integer per nodule)
-- JSON: `{SeriesInstanceUID}.json` (maps instance ID to class label)
-- Location: `raw_splitted/labelsTr/`
+Notes:
+- Label masks are instance masks (`0` = background, `>0` = lesion instance id)
+- JSON files map instance id to class label: `{ "instances": { "1": 1, ... } }`
 
-### Splits
-- 5-fold cross-validation splits
-- Each fold contains `train` and `val` case lists
-- Available in both pickle and JSON formats
+## What The Fused Script Adds
 
-## Notes
+Compared to the older `prepare.py`, the fused script also logs:
+- native coordinate hits
+- flipped-XY coordinate hits
+- local-search hits
+- out-of-bounds / background misses
+- matched and missing instance ids per case
 
-- Instance IDs in masks are sequential integers starting from 1
-- Background is represented by 0 in instance masks
-- All nodules from the same image are combined into a single instance mask
-- Metadata (origin, spacing, direction) is preserved from the original nodule blocks
-- Processing is parallelized using multiprocessing for efficiency
+These are stored in `conversion_log.csv`.
 
 ## Troubleshooting
 
-### CSV Validation Errors
-If you encounter CSV validation errors, ensure your CSV contains the required columns: `SeriesInstanceUID`, `NoduleID`, and `label`.
+1. `Mask not found`
+- Ensure mask file stem matches `SeriesInstanceUID` (or sanitized version with `.` replaced by `_`).
 
-### Missing Files
-If masks or metadata files are missing for certain nodules, the script will log warnings and continue processing remaining nodules.
+2. `Instances mismatch`
+- Check coordinate convention issues.
+- Review `conversion_log.csv` for `missing_instance_ids` and hit counters.
+- If needed, run with `--no-strict-instance-match`.
 
-### Memory Issues
-If you encounter memory issues with multiprocessing, reduce the `--num_processes` parameter.
+3. Slow processing
+- Lower `--jobs` if I/O is saturated.
+- Set `--local-search-radius 0` to disable neighborhood search.

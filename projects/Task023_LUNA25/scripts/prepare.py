@@ -1,17 +1,16 @@
 """
-Standalone LUNA25 preparation script for nnDetection.
+LUNA25 nnDetection directory builder.
 
-This script combines:
-1) Full dataset preparation flow from prepare.py
-2) Robust MedSAMv2 instance mapping diagnostics from prepare_MedSAMv2_masks.py
+Reads the conversion log and lesion log produced by match_MedSAM_masks.py,
+determines train/test splits from CSV files, and assembles the nnDetection-
+compliant directory structure.  No matching logic is performed here.
+
+Prerequisite: run match_MedSAM_masks.py first to produce the logs.
 
 Outputs:
 - Task023_LUNA25/raw_splitted/imagesTr, labelsTr, imagesTs, labelsTs
 - Task023_LUNA25/dataset.json
 - Task023_LUNA25/raw_splitted/splits.json
-- Task023_LUNA25/conversion_log.csv
-- Task023_LUNA25/medsam_lesion_match_report.csv
-- Task023_LUNA25/prepare.log
 """
 
 import argparse
@@ -22,10 +21,8 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
-import nibabel as nib
-import numpy as np
 import pandas as pd
 import SimpleITK as sitk
 from loguru import logger
@@ -40,14 +37,6 @@ def save_json(data: Dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f, indent=4)
-
-
-def copy_file(src: Path, dst: Path) -> bool:
-    if not src.exists():
-        return False
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
-    return True
 
 
 def convert_mha_to_nifti(src: Path, dst: Path) -> bool:
@@ -85,210 +74,18 @@ def find_mask_for_uid(mask_dir: Path, uid: str) -> Optional[Path]:
     return None
 
 
-def _in_bounds(x: int, y: int, z: int, shape: Tuple[int, int, int]) -> bool:
-    return 0 <= x < shape[0] and 0 <= y < shape[1] and 0 <= z < shape[2]
-
-
-def _find_instance_id_with_local_search(
-    data: np.ndarray,
-    x: int,
-    y: int,
-    z: int,
-    radius: int,
-) -> Tuple[int, bool, Optional[Tuple[int, int, int]]]:
-    """
-    Return (instance_id, used_local_search, matched_voxel).
-    """
-    nid = int(data[x, y, z])
-    if nid > 0:
-        return nid, False, (x, y, z)
-
-    if radius <= 0:
-        return 0, False, None
-
-    for dx in range(-radius, radius + 1):
-        for dy in range(-radius, radius + 1):
-            for dz in range(-radius, radius + 1):
-                xx, yy, zz = x + dx, y + dy, z + dz
-                if _in_bounds(xx, yy, zz, data.shape):
-                    nid = int(data[xx, yy, zz])
-                    if nid > 0:
-                        return nid, True, (xx, yy, zz)
-
-    return 0, False, None
-
-
-def build_instance_mapping_with_diagnostics(
-    data: np.ndarray,
-    affine: np.ndarray,
-    case_rows: pd.DataFrame,
-    local_search_radius: int,
-) -> Dict[str, object]:
-    inv_affine = np.linalg.inv(affine)
-
-    unique_ids = np.unique(data).astype(np.int64)
-    unique_ids = unique_ids[unique_ids > 0]
-    unique_id_set: Set[int] = set(unique_ids.tolist())
-
-    instance_mapping: Dict[str, int] = {}
-    matched_ids: Set[int] = set()
-
-    out_of_bounds = 0
-    background_hits = 0
-    native_hits = 0
-    flipped_xy_hits = 0
-    local_search_hits = 0
-    lesion_rows: List[Dict[str, object]] = []
-
-    optional_id_fields = [
-        "PatientID",
-        "StudyDate",
-        "LesionID",
-        "AnnotationID",
-        "NoduleID",
-    ]
-
-    for _, row in case_rows.iterrows():
-        xw = float(row["CoordX"])
-        yw = float(row["CoordY"])
-        zw = float(row["CoordZ"])
-
-        # Try both conventions: native and LPS->RAS flipped XY.
-        candidate_world_coords = [
-            np.array([xw, yw, zw, 1.0]),
-            np.array([-xw, -yw, zw, 1.0]),
-        ]
-
-        found = False
-        any_in_bounds = False
-        matched_instance_id = None
-        matched_voxel = None
-        query_voxel = None
-        used_local_search_flag = False
-        used_convention = ""
-        used_world_xyz = None
-
-        for candidate_idx, world_coords in enumerate(candidate_world_coords):
-            voxel_coords = inv_affine @ world_coords
-            x, y, z = np.round(voxel_coords[:3]).astype(int)
-
-            if not _in_bounds(x, y, z, data.shape):
-                continue
-
-            any_in_bounds = True
-            lesion_id, used_local_search, matched_voxel_candidate = (
-                _find_instance_id_with_local_search(
-                    data=data,
-                    x=x,
-                    y=y,
-                    z=z,
-                    radius=local_search_radius,
-                )
-            )
-            query_voxel = (int(x), int(y), int(z))
-
-            if lesion_id > 0:
-                instance_mapping[str(lesion_id)] = int(row["label"])
-                matched_ids.add(lesion_id)
-                matched_instance_id = int(lesion_id)
-                matched_voxel = matched_voxel_candidate
-                used_local_search_flag = bool(used_local_search)
-                used_world_xyz = (
-                    float(world_coords[0]),
-                    float(world_coords[1]),
-                    float(world_coords[2]),
-                )
-
-                if candidate_idx == 0:
-                    native_hits += 1
-                    used_convention = "native"
-                else:
-                    flipped_xy_hits += 1
-                    used_convention = "flipped_xy"
-
-                if used_local_search:
-                    local_search_hits += 1
-
-                found = True
-                break
-
-        if not found:
-            if not any_in_bounds:
-                out_of_bounds += 1
-            else:
-                background_hits += 1
-
-        lesion_report_row: Dict[str, object] = {
-            "SeriesInstanceUID": str(row["SeriesInstanceUID"]),
-            "CoordX": xw,
-            "CoordY": yw,
-            "CoordZ": zw,
-            "label": int(row["label"]),
-            "matched": bool(found),
-            "matched_instance_id": matched_instance_id,
-            "match_convention": used_convention if found else "unmatched",
-            "local_search_used": bool(used_local_search_flag),
-            "search_radius": local_search_radius,
-            "in_bounds": bool(any_in_bounds),
-            "query_voxel_x": query_voxel[0] if query_voxel else None,
-            "query_voxel_y": query_voxel[1] if query_voxel else None,
-            "query_voxel_z": query_voxel[2] if query_voxel else None,
-            "matched_voxel_x": matched_voxel[0] if matched_voxel else None,
-            "matched_voxel_y": matched_voxel[1] if matched_voxel else None,
-            "matched_voxel_z": matched_voxel[2] if matched_voxel else None,
-            "distance_voxel": None,
-            "distance_mm": None,
-        }
-
-        for field in optional_id_fields:
-            lesion_report_row[field] = row[field] if field in row.index else None
-
-        if (
-            found
-            and matched_voxel is not None
-            and query_voxel is not None
-            and used_world_xyz is not None
-        ):
-            qx, qy, qz = query_voxel
-            mx, my, mz = matched_voxel
-            lesion_report_row["distance_voxel"] = float(
-                np.linalg.norm(np.array([mx - qx, my - qy, mz - qz], dtype=np.float64))
-            )
-            matched_world = affine @ np.array([mx, my, mz, 1.0], dtype=np.float64)
-            lesion_report_row["distance_mm"] = float(
-                np.linalg.norm(
-                    np.array(
-                        [
-                            matched_world[0] - used_world_xyz[0],
-                            matched_world[1] - used_world_xyz[1],
-                            matched_world[2] - used_world_xyz[2],
-                        ],
-                        dtype=np.float64,
-                    )
-                )
-            )
-
-        lesion_rows.append(lesion_report_row)
-
-    missing_ids = sorted(unique_id_set - matched_ids)
-
-    return {
-        "instance_mapping": instance_mapping,
-        "unique_id_set": unique_id_set,
-        "matched_ids": matched_ids,
-        "missing_ids": missing_ids,
-        "unique_mask_ids_count": int(len(unique_id_set)),
-        "mapped_ids_count": int(len(instance_mapping)),
-        "missing_ids_count": int(len(missing_ids)),
-        "out_of_bounds_count": int(out_of_bounds),
-        "background_hit_count": int(background_hits),
-        "native_hit_count": int(native_hits),
-        "flipped_xy_hit_count": int(flipped_xy_hits),
-        "local_search_hit_count": int(local_search_hits),
-        "matched_instance_ids": " ".join(map(str, sorted(matched_ids))),
-        "missing_instance_ids": " ".join(map(str, missing_ids)),
-        "lesion_rows": lesion_rows,
-    }
+def build_instance_mapping_from_lesion_log(
+    lesion_log: pd.DataFrame,
+) -> Dict[str, Dict[str, int]]:
+    """Build {uid: {instance_id_str: label}} from the lesion-level log."""
+    matched = lesion_log[lesion_log["matched"] == True]  # noqa: E712
+    mapping: Dict[str, Dict[str, int]] = {}
+    for _, row in matched.iterrows():
+        uid = str(row["uid"])
+        inst_id = str(int(row["matched_instance_id"]))
+        label = int(row["label"])
+        mapping.setdefault(uid, {})[inst_id] = label
+    return mapping
 
 
 def process_case(
@@ -297,180 +94,83 @@ def process_case(
     image_dir: Path,
     mask_dir: Path,
     output_dir: Path,
-    annotations_group: pd.DataFrame,
+    instance_mapping: Dict[str, int],
     labels_only: bool,
-    report_only: bool,
-    local_search_radius: int,
-    strict_instance_match: bool,
-    discard_duplicates: bool,
-) -> Tuple[str, bool, Optional[str], Dict[str, object], List[Dict[str, object]]]:
+) -> Tuple[str, str, bool, Optional[str]]:
+    """Copy mask + write JSON (+ convert image unless labels_only).
+
+    Returns (uid, split_name, success, error_message).
+    """
     uid_sanitized = sanitize_uid(uid)
 
-    log: Dict[str, object] = {
-        "split": split_name,
-        "uid": uid,
-        "uid_sanitized": uid_sanitized,
-        "status": "success",
-        "error_message": "",
-        "mask_path": "",
-        "csv_rows_count": int(len(annotations_group)),
-        "local_search_radius": local_search_radius,
-        "unique_mask_ids_count": 0,
-        "mapped_ids_count": 0,
-        "missing_ids_count": 0,
-        "out_of_bounds_count": 0,
-        "background_hit_count": 0,
-        "native_hit_count": 0,
-        "flipped_xy_hit_count": 0,
-        "local_search_hit_count": 0,
-        "matched_instance_ids": "",
-        "missing_instance_ids": "",
-        "unmatched_lesion_count": 0,
-        "has_duplicates_matching": False,
-        "discarded": False,
-        "json_path": "",
-    }
+    if split_name == "train":
+        dst_img = output_dir / "imagesTr" / f"{uid_sanitized}_0000.nii.gz"
+        dst_lbl = output_dir / "labelsTr" / f"{uid_sanitized}.nii.gz"
+        dst_json = output_dir / "labelsTr" / f"{uid_sanitized}.json"
+    else:
+        dst_img = output_dir / "imagesTs" / f"{uid_sanitized}_0000.nii.gz"
+        dst_lbl = output_dir / "labelsTs" / f"{uid_sanitized}.nii.gz"
+        dst_json = output_dir / "labelsTs" / f"{uid_sanitized}.json"
 
     try:
-        if not labels_only and not report_only:
-            src_img = image_dir / f"{uid}.mha"
-            if not src_img.exists():
-                msg = f"Image not found at {src_img}"
-                log["status"] = "image_not_found"
-                log["error_message"] = msg
-                return uid, False, msg, log, []
-
-        if split_name == "train":
-            dst_img = output_dir / "imagesTr" / f"{uid_sanitized}_0000.nii.gz"
-            dst_lbl = output_dir / "labelsTr" / f"{uid_sanitized}.nii.gz"
-            dst_json = output_dir / "labelsTr" / f"{uid_sanitized}.json"
-        else:
-            dst_img = output_dir / "imagesTs" / f"{uid_sanitized}_0000.nii.gz"
-            dst_lbl = output_dir / "labelsTs" / f"{uid_sanitized}.nii.gz"
-            dst_json = output_dir / "labelsTs" / f"{uid_sanitized}.json"
-
+        # Copy mask
         src_mask = find_mask_for_uid(mask_dir, uid)
         if src_mask is None:
-            msg = "Mask not found"
-            log["status"] = "mask_not_found"
-            log["error_message"] = msg
-            return uid, False, msg, log, []
-        log["mask_path"] = str(src_mask)
+            return uid, split_name, False, "Mask not found"
+        dst_lbl.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_mask, dst_lbl)
 
-        nii = nib.load(src_mask)
-        data = nii.get_fdata()
-        mapping_diag = build_instance_mapping_with_diagnostics(
-            data=data,
-            affine=nii.affine,
-            case_rows=annotations_group,
-            local_search_radius=local_search_radius,
-        )
+        # Write instance mapping JSON
+        save_json({"instances": instance_mapping}, dst_json)
 
-        log["unique_mask_ids_count"] = mapping_diag["unique_mask_ids_count"]
-        log["mapped_ids_count"] = mapping_diag["mapped_ids_count"]
-        log["missing_ids_count"] = mapping_diag["missing_ids_count"]
-        log["out_of_bounds_count"] = mapping_diag["out_of_bounds_count"]
-        log["background_hit_count"] = mapping_diag["background_hit_count"]
-        log["native_hit_count"] = mapping_diag["native_hit_count"]
-        log["flipped_xy_hit_count"] = mapping_diag["flipped_xy_hit_count"]
-        log["local_search_hit_count"] = mapping_diag["local_search_hit_count"]
-        log["matched_instance_ids"] = mapping_diag["matched_instance_ids"]
-        log["missing_instance_ids"] = mapping_diag["missing_instance_ids"]
-        lesion_rows = mapping_diag["lesion_rows"]
-
-        # Compute diagnostic fields (always, regardless of flags)
-        unmatched_lesion_count = sum(1 for r in lesion_rows if not r["matched"])
-        matched_instance_ids_list = [
-            r["matched_instance_id"] for r in lesion_rows if r["matched"]
-        ]
-        has_duplicates_matching = len(matched_instance_ids_list) != len(
-            set(matched_instance_ids_list)
-        )
-        log["unmatched_lesion_count"] = unmatched_lesion_count
-        log["has_duplicates_matching"] = has_duplicates_matching
-
-        if len(annotations_group) == 0:
-            log["status"] = "no_csv_match"
-
-        if strict_instance_match and unmatched_lesion_count > 0:
-            msg = (
-                f"Unmatched lesions: {unmatched_lesion_count} of "
-                f"{len(annotations_group)} lesions not matched"
-            )
-            log["status"] = "discarded_unmatched_lesions"
-            log["error_message"] = msg
-            log["discarded"] = True
-            return uid, False, msg, log, lesion_rows
-
-        if discard_duplicates and has_duplicates_matching:
-            msg = (
-                "Duplicate instance mapping: multiple lesions mapped "
-                "to the same mask instance ID"
-            )
-            log["status"] = "discarded_duplicate_instances"
-            log["error_message"] = msg
-            log["discarded"] = True
-            return uid, False, msg, log, lesion_rows
-
-        if log["status"] == "no_csv_match":
-            return uid, False, str(log["status"]), log, lesion_rows
-
-        # All validation passed - perform persistent writes
-        if not report_only:
-            if not copy_file(src_mask, dst_lbl):
-                msg = "Failed to copy mask"
-                log["status"] = "copy_failed"
-                log["error_message"] = msg
-                return uid, False, msg, log, lesion_rows
-
-            save_json({"instances": mapping_diag["instance_mapping"]}, dst_json)
-            log["json_path"] = str(dst_json)
-
-        if not labels_only and not report_only:
+        # Convert image
+        if not labels_only:
             src_img = image_dir / f"{uid}.mha"
             if not convert_mha_to_nifti(src_img, dst_img):
-                msg = "Failed to convert image"
-                log["status"] = "image_conversion_failed"
-                log["error_message"] = msg
-                return uid, False, msg, log, lesion_rows
+                return uid, split_name, False, f"Image conversion failed for {src_img}"
 
-        return uid, True, None, log, lesion_rows
-
+        return uid, split_name, True, None
     except Exception as e:
-        msg = f"Failed to process case: {e}"
-        log["status"] = "error"
-        log["error_message"] = msg
-        return uid, False, msg, log, []
+        return uid, split_name, False, str(e)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Standalone LUNA25 preparation for nnDetection (fused prepare + MedSAMv2 diagnostics)",
+        description=(
+            "Build nnDetection directory structure for LUNA25 from pre-computed "
+            "matching logs (produced by match_MedSAM_masks.py)."
+        ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--images",
-        type=str,
-        required=True,
-        help="Path to original LUNA25 images (.mha)",
+        "--images", type=str, required=True, help="Path to LUNA25 images (.mha)"
     )
     parser.add_argument(
         "--masks", type=str, required=True, help="Path to MedSAM2 masks (.nii/.nii.gz)"
     )
     parser.add_argument(
-        "--output",
+        "--conversion-log",
         type=str,
         required=True,
-        help="Path to nnDetection raw data output root",
+        help="Path to case-level conversion log CSV (from match_MedSAM_masks.py)",
     )
     parser.add_argument(
-        "-c", "--csv", type=str, required=True, help="Path to annotations CSV"
+        "--lesion-log",
+        type=str,
+        required=True,
+        help="Path to lesion-level log CSV (from match_MedSAM_masks.py)",
     )
     parser.add_argument(
         "--train-csv", type=str, required=True, help="Path to luna25-train.csv"
     )
     parser.add_argument(
         "--test-csv", type=str, required=True, help="Path to luna25-test.csv"
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="Path to nnDetection raw data output root",
     )
     parser.add_argument(
         "--jobs", type=int, default=8, help="Number of parallel workers"
@@ -481,272 +181,161 @@ def main() -> None:
         help="Only process labels (masks + JSON), skip image conversion",
     )
     parser.add_argument(
-        "--local-search-radius",
-        type=int,
-        default=1,
-        help="Local neighborhood search radius around rounded voxel coordinates",
-    )
-    parser.add_argument(
-        "--strict-instance-match",
+        "--single-class",
         action="store_true",
-        default=False,
-        help="Discard cases with unmatched lesions (default: disabled)",
-    )
-    parser.add_argument(
-        "--discard-duplicates",
-        action="store_true",
-        default=False,
-        help="Discard cases where multiple lesions map to the same mask instance ID (default: disabled)",
-    )
-    parser.add_argument(
-        "--log-csv",
-        type=str,
-        default=None,
-        help="Path to case-level conversion log CSV. Defaults to <output>/Task023_LUNA25/conversion_log.csv",
-    )
-    parser.add_argument(
-        "--lesion-log-csv",
-        dest="lesion_report_csv",
-        type=str,
-        default=None,
-        help="Path to lesion-level report CSV. Defaults to <output>/Task023_LUNA25/medsam_lesion_match_report.csv",
-    )
-    parser.add_argument(
-        "--lesion-report-csv",
-        dest="lesion_report_csv",
-        type=str,
-        default=None,
-        help="Alias of --lesion-log-csv",
-    )
-    parser.add_argument(
-        "--report-only",
-        action="store_true",
-        help="Only create the lesion-level report and do not write any other outputs",
+        help="Collapse benign/malignant into a single 'lesion' class (output to Task024_LUNA25_singleclass)",
     )
     args = parser.parse_args()
 
     overall_start_time = time.time()
 
-    task_data_dir = Path(args.output) / "Task023_LUNA25"
+    task_name = "Task024_LUNA25_singleclass" if args.single_class else "Task023_LUNA25"
+    task_data_dir = Path(args.output) / task_name
     raw_splitted_dir = task_data_dir / "raw_splitted"
-    if not args.report_only:
-        raw_splitted_dir.mkdir(parents=True, exist_ok=True)
-
-    lesion_report_csv_path = (
-        Path(args.lesion_report_csv)
-        if args.lesion_report_csv
-        else task_data_dir / "lesion_match_report.csv"
-    )
-    lesion_report_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
     logger.remove()
     logger.add(sys.stdout, format="{time:HH:mm:ss} | {level} | {message}", level="INFO")
-    if not args.report_only:
-        logger.add(
-            task_data_dir / "prepare.log",
-            format="{time} | {level} | {message}",
-            level="DEBUG",
-        )
+    logger.add(
+        task_data_dir / "prepare.log",
+        format="{time} | {level} | {message}",
+        level="DEBUG",
+    )
 
     logger.info("=" * 60)
-    logger.info("LUNA25 DATASET PREPARATION FOR NNDETECTION (FUSED)")
+    logger.info("LUNA25 NNDETECTION DIRECTORY BUILDER")
     logger.info("=" * 60)
     logger.info(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info(f"Local search radius: {args.local_search_radius}")
 
     try:
         image_dir = Path(args.images)
         mask_dir = Path(args.masks)
 
-        logger.info("Validating input paths...")
-        if not image_dir.exists():
-            raise RuntimeError(f"Images directory not found: {image_dir}")
-        if not mask_dir.exists():
-            raise RuntimeError(f"Masks directory not found: {mask_dir}")
+        # ---- validate inputs ------------------------------------------------
+        for label, p in [
+            ("Images", image_dir),
+            ("Masks", mask_dir),
+            ("Conversion log", Path(args.conversion_log)),
+            ("Lesion log", Path(args.lesion_log)),
+            ("Train CSV", Path(args.train_csv)),
+            ("Test CSV", Path(args.test_csv)),
+        ]:
+            if not p.exists():
+                raise RuntimeError(f"{label} not found: {p}")
         logger.info("All input paths validated")
 
-        if not args.report_only:
-            logger.info("Creating output directories...")
-            (raw_splitted_dir / "imagesTr").mkdir(parents=True, exist_ok=True)
-            (raw_splitted_dir / "labelsTr").mkdir(parents=True, exist_ok=True)
-            (raw_splitted_dir / "imagesTs").mkdir(parents=True, exist_ok=True)
-            (raw_splitted_dir / "labelsTs").mkdir(parents=True, exist_ok=True)
-            logger.info("Output directories created")
-
-        logger.info("Loading train/test splits and annotations...")
+        # ---- read CSVs ------------------------------------------------------
+        conversion_log = pd.read_csv(args.conversion_log)
+        lesion_log = pd.read_csv(args.lesion_log)
         train_df = pd.read_csv(args.train_csv)
         test_df = pd.read_csv(args.test_csv)
-        annotations_csv = pd.read_csv(args.csv)
 
-        required_cols = ["SeriesInstanceUID", "CoordX", "CoordY", "CoordZ", "label"]
-        for col in required_cols:
-            if col not in annotations_csv.columns:
-                raise ValueError(f"Column '{col}' not found in annotations CSV")
+        train_uids = set(train_df["SeriesInstanceUID"].astype(str).unique())
+        test_uids = set(test_df["SeriesInstanceUID"].astype(str).unique())
+        logger.info(f"Split sizes: {len(train_uids)} train, {len(test_uids)} test")
 
-        train_uids = train_df["SeriesInstanceUID"].astype(str).unique()
-        test_uids = test_df["SeriesInstanceUID"].astype(str).unique()
+        # ---- build instance mappings from lesion log ------------------------
+        instance_mappings = build_instance_mapping_from_lesion_log(lesion_log)
 
+        if args.single_class:
+            for uid_map in instance_mappings.values():
+                for inst_id in uid_map:
+                    uid_map[inst_id] = 0
+            logger.info(
+                "Single-class mode: all instance labels remapped to 0 ('lesion')"
+            )
+
+        # ---- filter conversion log to non-discarded successes ---------------
+        valid_mask = (conversion_log["status"] == "success") & (
+            conversion_log["discarded"] != True  # noqa: E712
+        )
+        valid_cases = conversion_log.loc[valid_mask]
         logger.info(
-            f"Found {len(train_uids)} training cases and {len(test_uids)} test cases"
+            f"Conversion log: {len(conversion_log)} total, {len(valid_cases)} valid"
         )
 
+        # ---- create output directories --------------------------------------
+        for subdir in ("imagesTr", "labelsTr", "imagesTs", "labelsTs"):
+            (raw_splitted_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+        # ---- process cases in parallel --------------------------------------
         training_entries: List[str] = []
         test_entries: List[str] = []
-        conversion_logs: List[Dict[str, object]] = []
-        lesion_report_rows: List[Dict[str, object]] = []
-
-        logger.info(f"Processing training cases with {args.jobs} workers")
         train_success = 0
-        with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-            futures = []
-            for uid in train_uids:
-                annotations = annotations_csv[
-                    annotations_csv["SeriesInstanceUID"].astype(str) == str(uid)
-                ]
-                futures.append(
-                    executor.submit(
-                        process_case,
-                        uid=str(uid),
-                        split_name="train",
-                        image_dir=image_dir,
-                        mask_dir=mask_dir,
-                        output_dir=raw_splitted_dir,
-                        annotations_group=annotations,
-                        labels_only=args.labels_only,
-                        report_only=args.report_only,
-                        local_search_radius=args.local_search_radius,
-                        strict_instance_match=args.strict_instance_match,
-                        discard_duplicates=args.discard_duplicates,
-                    )
-                )
-
-            for future in tqdm(futures, total=len(train_uids), desc="Training cases"):
-                uid, success, error, case_log, case_lesions = future.result()
-                conversion_logs.append(case_log)
-                lesion_report_rows.extend(
-                    [
-                        {
-                            "split": "train",
-                            "uid": uid,
-                            "uid_sanitized": sanitize_uid(uid),
-                            **row,
-                        }
-                        for row in case_lesions
-                    ]
-                )
-                if success:
-                    training_entries.append(f"{sanitize_uid(uid)}.nii.gz")
-                    train_success += 1
-                else:
-                    logger.warning(f"Skipping train case {uid}: {error}")
-
-        logger.info(f"Processing test cases with {args.jobs} workers")
         test_success = 0
+        skipped_no_split = 0
+
+        futures = []
         with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-            futures = []
-            for uid in test_uids:
-                annotations = annotations_csv[
-                    annotations_csv["SeriesInstanceUID"].astype(str) == str(uid)
-                ]
+            for _, row in valid_cases.iterrows():
+                uid = str(row["uid"])
+                if uid in train_uids:
+                    split_name = "train"
+                elif uid in test_uids:
+                    split_name = "test"
+                else:
+                    skipped_no_split += 1
+                    logger.debug(f"UID {uid} not in train or test CSV, skipping")
+                    continue
+
+                mapping = instance_mappings.get(uid, {})
                 futures.append(
                     executor.submit(
                         process_case,
-                        uid=str(uid),
-                        split_name="test",
+                        uid=uid,
+                        split_name=split_name,
                         image_dir=image_dir,
                         mask_dir=mask_dir,
                         output_dir=raw_splitted_dir,
-                        annotations_group=annotations,
+                        instance_mapping=mapping,
                         labels_only=args.labels_only,
-                        report_only=args.report_only,
-                        local_search_radius=args.local_search_radius,
-                        strict_instance_match=args.strict_instance_match,
-                        discard_duplicates=args.discard_duplicates,
                     )
                 )
 
-            for future in tqdm(futures, total=len(test_uids), desc="Test cases"):
-                uid, success, error, case_log, case_lesions = future.result()
-                conversion_logs.append(case_log)
-                lesion_report_rows.extend(
-                    [
-                        {
-                            "split": "test",
-                            "uid": uid,
-                            "uid_sanitized": sanitize_uid(uid),
-                            **row,
-                        }
-                        for row in case_lesions
-                    ]
-                )
+            for future in tqdm(futures, desc="Building dataset"):
+                uid, split_name, success, error = future.result()
                 if success:
-                    test_entries.append(f"{sanitize_uid(uid)}.nii.gz")
-                    test_success += 1
+                    entry = f"{sanitize_uid(uid)}.nii.gz"
+                    if split_name == "train":
+                        training_entries.append(entry)
+                        train_success += 1
+                    else:
+                        test_entries.append(entry)
+                        test_success += 1
                 else:
-                    logger.warning(f"Skipping test case {uid}: {error}")
+                    logger.warning(f"Skipping {split_name} case {uid}: {error}")
 
-        lesion_report_df = pd.DataFrame(lesion_report_rows)
-        lesion_report_df.to_csv(lesion_report_csv_path, index=False)
+        # ---- write metadata -------------------------------------------------
+        dataset_info = {
+            "name": "LUNA25",
+            "task": task_name,
+            "target_class": None if args.single_class else 1,
+            "test_labels": True,
+            "labels": {"0": "lesion"}
+            if args.single_class
+            else {"0": "benign", "1": "malignant"},
+            "modalities": {"0": "CT"},
+            "dim": 3,
+            "info": "LUNA25 dataset for lung nodule detection and classification.",
+        }
+        save_json(dataset_info, task_data_dir / "dataset.json")
+        save_json(
+            {"train": training_entries, "test": test_entries},
+            raw_splitted_dir / "splits.json",
+        )
 
-        if not args.report_only:
-            dataset_info = {
-                "name": "LUNA25",
-                "task": "Task023_LUNA25",
-                "target_class": None,
-                "test_labels": True,
-                "labels": {"0": "benign", "1": "malignant"},
-                "modalities": {"0": "CT"},
-                "dim": 3,
-                "info": "LUNA25 dataset for lung nodule detection and classification. Train/test splits from CSV files.",
-            }
-            save_json(dataset_info, task_data_dir / "dataset.json")
-
-            final_splits = {"train": training_entries, "test": test_entries}
-            save_json(final_splits, raw_splitted_dir / "splits.json")
-
-        log_df = pd.DataFrame(conversion_logs)
-        if not args.report_only:
-            log_csv_path = (
-                Path(args.log_csv)
-                if args.log_csv
-                else task_data_dir / "conversion_log.csv"
-            )
-            log_df.to_csv(log_csv_path, index=False)
-
+        # ---- summary --------------------------------------------------------
         overall_time = time.time() - overall_start_time
         logger.info("=" * 60)
         logger.info("PREPARATION COMPLETED")
         logger.info("=" * 60)
-        logger.info(
-            f"Training: {train_success}/{len(train_uids)} cases ({(100.0 * train_success / max(1, len(train_uids))):.1f}%)"
-        )
-        logger.info(
-            f"Test: {test_success}/{len(test_uids)} cases ({(100.0 * test_success / max(1, len(test_uids))):.1f}%)"
-        )
-
-        if not log_df.empty:
-            logger.info(
-                "Detailed mapping summary: "
-                f"success={(log_df['status'] == 'success').sum()} "
-                f"no_csv_match={(log_df['status'] == 'no_csv_match').sum()} "
-                f"discarded_unmatched={(log_df['status'] == 'discarded_unmatched_lesions').sum()} "
-                f"discarded_duplicates={(log_df['status'] == 'discarded_duplicate_instances').sum()} "
-                f"error={(log_df['status'] == 'error').sum()}"
-            )
-        logger.info(f"Lesion-level report saved to: {lesion_report_csv_path}")
-        if not args.report_only:
-            logger.info(f"Conversion log saved to: {log_csv_path}")
+        logger.info(f"Training: {train_success} cases")
+        logger.info(f"Test:     {test_success} cases")
+        if skipped_no_split:
+            logger.info(f"Skipped (not in train/test CSV): {skipped_no_split}")
         logger.info(
             f"Total time: {overall_time:.2f}s ({overall_time / 60:.1f} minutes)"
         )
         logger.info(f"Output: {task_data_dir}")
-
-        if (not args.report_only) and (
-            train_success < len(train_uids) or test_success < len(test_uids)
-        ):
-            logger.warning(
-                "Some cases failed - check prepare.log and conversion_log.csv for details"
-            )
 
     except Exception as e:
         error_time = time.time() - overall_start_time
